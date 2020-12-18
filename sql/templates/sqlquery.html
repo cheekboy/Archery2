@@ -146,7 +146,7 @@
                         <button class="btn btn-default btn-sm pull-right" onclick="tab_remove()">
                             <span class="glyphicon glyphicon-minus"></span>
                         </button>
-                        <button class="btn btn-default btn-sm pull-right" onclick="tab_add()">
+                        <button class="btn btn-default btn-sm pull-right" onclick="tab_clear()">
                             <span class="glyphicon glyphicon-plus"></span>
                         </button>
                     </ul>
@@ -569,10 +569,20 @@
             $("#tab-content").append(div);//div添加到div
 
             //激活添加的tab
-            $("#nav-tabs a:last").tab('show')
+            $("#nav-tabs a:last").tab('show');
+            $("#nav-tabs a:first").tab('show');
 
         }
-
+        function tab_clear() {
+            var tab_number = parseInt(sessionStorage.getItem('tab_num'));
+            while (tab_number > 0) {
+                $("#execute_result_tab" + tab_number).remove()
+                $('#sqlquery_result' + tab_number).remove();
+                sessionStorage.setItem('tab_num', Number(tab_number) - 1);
+                tab_number = parseInt(sessionStorage.getItem('tab_num'));
+            }
+            $("#nav-tabs a:first").tab('show');
+        }
         //删除执行结果页面
         function tab_remove() {
             var tab_number = sessionStorage.getItem('tab_num');
@@ -696,6 +706,7 @@
                 if (result['column_list']) {
                     //异步获取要动态生成的列
                     var columns = [];
+                    console.log(result['column_list'])
                     $.each(result['column_list'], function (i, column) {
                         columns.push({
                             "field": i,
@@ -768,6 +779,7 @@
                             strictSearch: false,                //是否全匹配搜索
                             locale: 'zh-CN'
                         });
+                        console
                     }
                     //执行时间和脱敏时间赋值
                     $("#" + ('time') + n).text(result['query_time'] + ' sec');
@@ -803,55 +815,99 @@
         function sqlquery(sql) {
             var optgroup = $('#instance_name :selected').parent().attr('label');
             var select_sqlContent = editor.session.getTextRange(editor.getSelectionRange());
+            var sqlSplit;
             if (select_sqlContent) {
                 sqlContent = select_sqlContent
             } else {
                 var sqlContent = editor.getValue();
+                console.log(sqlContent)
 
             }
-            if (optgroup === "Oracle") {
-                //查看执行计划
-                if (sql === 'explain') {
-                    sqlContent = 'explain plan for ' + sqlContent
-                }
-                //查看表结构
-                else if (sql === 'show create table') {
-                    sqlContent = "desc " + $("#table_name").val() + ";"
-                }
-            } else if (optgroup === "MySQL") {
-                //查看执行计划
-                if (sql === 'explain') {
+
+            switch (optgroup) {
+                case "Oracle":
+                    sqlSplit = ';';
+                    //查看执行计划
+                    if (sql === 'explain') {
+                        sqlContent = 'explain plan for ' + sqlContent
+                    }
+                    //查看表结构
+                    else if (sql === 'show create table') {
+                            sqlContent = "desc " + $("#table_name").val() + ";"
+                    }
+                    break;
+                case "MySQL":
+                    sqlSplit = ';';
+                    //查看执行计划
+                    if (sql === 'explain') {
                     sqlContent = 'explain ' + sqlContent
-                }
-                //查看表结构
-                else if (sql === 'show create table') {
-                    sqlContent = "show create table " + $("#table_name").val() + ";"
-                }
+                    }
+                    //查看表结构
+                    else if (sql === 'show create table') {
+                            sqlContent = "show create table " + $("#table_name").val() + ";"
+                    }
+                    break;
+                case "MsSQL":
+                    break;
+                case "Redis":
+                    break;
+                case "PgSQL":
+                    break;
+                case "Mongo":
+                    break;
+                case "Phoenix":
+                    break;
             }
-            //提交请求
-            $.ajax({
-                type: "post",
-                url: "/query/",
-                dataType: "json",
-                data: {
-                    instance_name: $("#instance_name").val(),
-                    db_name: $("#db_name").val(),
-                    schema_name: $("#schema_name").val(),
-                    tb_name: $("#table_name").val(),
-                    sql_content: sqlContent,
-                    limit_num: $("#limit_num").val()
-                },
-                complete: function () {
-                    $('input[type=button]').removeClass('disabled');
-                    $('input[type=button]').prop('disabled', false);
-                    optgroup_control();
-                },
-                success: function (data) {
-                    display_data(data)
-                },
-                error: function (XMLHttpRequest, textStatus, errorThrown) {
-                    alert(errorThrown);
+
+            // if (optgroup === "Oracle") {
+
+            // } else if (optgroup === "MySQL") {
+
+            // }
+
+            var splitSQLContent = sqlContent.split(";"),
+                listSQL = [],
+                lenSQL;
+            splitSQLContent.forEach(function (sql, index) {
+                if (sql.trim().length > 0) {
+                    listSQL.push(sql);
                 }
+            });
+            lenSQL = listSQL.length;
+
+            //查询前清理所有此前的查询结果tab
+            tab_clear();
+
+            listSQL.forEach(function(sqlContent, index) {
+                //提交请求
+                $.ajax({
+                    type: "post",
+                    url: "/query/",
+                    dataType: "json",
+                    data: {
+                        instance_name: $("#instance_name").val(),
+                        db_name: $("#db_name").val(),
+                        schema_name: $("#schema_name").val(),
+                        tb_name: $("#table_name").val(),
+                        sql_content: sqlContent,
+                        limit_num: $("#limit_num").val(),
+                        data_charset: $("#data_charset").val()
+                    },
+                    complete: function () {
+                        $('input[type=button]').removeClass('disabled');
+                        $('input[type=button]').prop('disabled', false);
+                        optgroup_control();
+                    },
+                    success: function (data) {
+                        display_data(data)
+                        if (lenSQL < 2) {
+                            $("#nav-tabs a:last").tab('show');
+                        }
+                    },
+                    error: function (XMLHttpRequest, textStatus, errorThrown) {
+                        alert(errorThrown);
+                    }
+                });
             });
         }
     </script>
